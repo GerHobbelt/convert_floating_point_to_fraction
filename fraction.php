@@ -249,11 +249,9 @@ class Fraction extends DebugReporting
         // find nearest fraction
         $intPart = (int)$val;
         $val -= (float)$intPart;
-        $lowest_acceptable_denom = 1.0 / $Precision;
 
         $low = new Fraction(0, 1);           // "A" = 0/1 (a/b)
         $high = new Fraction(1, 1);          // "B" = 1/1 (c/d)
-        $ans = $high;
 
         if (DebugReporting::$dbg >= 2) printf("<p>Fraction: val = %s, precision = %s, intpart = %s</p>\n", $val, $Precision, $intPart);
             
@@ -272,15 +270,6 @@ class Fraction extends DebugReporting
             {
                 printf("<p>Fraction: testlow = %s (fraction: %d/%d), testhigh = %s (fraction: %d/%d) - %d</p>\n", 
                         $testLow, $low->num, $low->denom, $testHigh, $high->num, $high->denom, $lowest_acceptable_denom);
-            }
-            
-            if ($testHigh <= $testLow && ($high->denom <= $lowest_acceptable_denom))
-            {
-                $ans = $high;
-            }
-            else if ($low->denom <= $lowest_acceptable_denom)
-            {
-                $ans = $low;
             }
             
             // test for match:
@@ -379,11 +368,10 @@ class Fraction extends DebugReporting
 
         if (DebugReporting::$dbg >= 2)
         {
-            printf("<p>Fraction: DONE for %f at precision %f: high = %s/%s,\n", $val, $Precision, $high->num, $high->denom);
-            printf("answer = %s/%s</p>\n", $ans->num, $ans->denom);
+            printf("<p>Fraction: DONE for %f at precision %f: answer = %s/%s</p>\n", $val, $Precision, $high->num, $high->denom);
         }
         
-        return $ans; // $high;
+        return $high;
     }
 
     public static function Test()
