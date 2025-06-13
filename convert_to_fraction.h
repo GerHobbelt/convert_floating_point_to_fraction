@@ -13,14 +13,18 @@ namespace cvt_2_fraction
 {
 	constexpr bool DebugReporting = true;
 
-#if 0
 	template<typename int_type>
 	using Fraction = boost::rational::rational<int_type>;
 
-	// problem: boost::rational does not allow for setting the nominator or denominator directly.
-	// So we chose to use our own fraction class instead...
-#endif
+	template<typename int_type>
+	double toFloat(const Fraction<int_type> &frac) {
+			return double(frac.numerator()) / double(frac.denominator());
+		}
 
+	template<typename int_type>
+	std::string toString(const Fraction<int_type> &frac) {
+			return std::format("{}/{}", frac.numerator(), frac.denominator());
+		}
 
 
 
@@ -241,50 +245,22 @@ namespace cvt_2_fraction
     /// </summary>
 
 	template<typename int_type>
-	struct Fraction {
-		int_type num;   // numerator
-		int_type denom; // denominator
+	Fraction<int_type> toFract(double val, double Precision);
 
-		Fraction(int_type n = int_type(0), int_type d = int_type(1)): num(n), denom(d) {
-			if (denom == 0) {
-				throw std::invalid_argument("Denominator cannot be zero.");
-			}
-			if (denom < 0) { // ensure denominator is always positive
-				num = -num;
-				denom = -denom;
-			}
-		}
+	template<typename int_type>
+	Fraction<int_type> toFract(float val)
+        {
+            return toFract<int_type>(double(val), FLT_EPSILON /* 1.0E-13 */ /* float.Epsilon */ );
+        }
 
-		int_type numerator() const { return num; }
-		int_type denominator() const { return denom; }
+	template<typename int_type>
+	Fraction<int_type> toFract(double val)
+        {
+            return toFract<int_type>(val, DBL_EPSILON /* 1.0E-13 */ /* double.Epsilon */ );
+        }
 
-		double toFloat(void) const {
-			return double(num) / double(denom);
-		}
-
-		std::string toString(void) const {
-			return std::format("{}/{}", num, denom);
-		}
-
-
-		boost::rational::rational<int_type> toRational(void) const {
-			return boost::rational::rational<int_type>(num, denom);
-		}
-
-
-		//static Fraction<int_type> toFract(double val, double Precision);
-
-		static Fraction<int_type> toFract(float val)
-		{
-			return toFract(double(val), FLT_EPSILON /* 1.0E-13 */ /* float.Epsilon */);
-		}
-
-		static Fraction<int_type> toFract(double val)
-		{
-			return toFract(val, DBL_EPSILON /* 1.0E-13 */ /* double.Epsilon */);
-		}
-
-		static Fraction<int_type> toFract(double val, double Precision)
+	template<typename int_type>
+	Fraction<int_type> toFract(double val, double Precision)
 		{
 			constexpr int_type MaxValue{std::numeric_limits<int_type>::max()};
 
@@ -299,11 +275,9 @@ namespace cvt_2_fraction
 			{
 				throw std::invalid_argument(std::format("fraction cannot be larger than +/-{}.", MaxValue));
 			}
-			int_type lowest_acceptable_denom = int_type(1.0 / Precision);
 
 			Fraction<int_type> low(int_type(0), int_type(1));           // "A" = 0/1 (a/b)
 			Fraction<int_type> high(int_type(1), int_type(1));          // "B" = 1/1 (c/d)
-			Fraction<int_type> ans = high;
 
 			if (DebugReporting) {
 				std::cerr << std::format("Fraction: val = {}, precision = {}, intpart = {}\n", val, Precision, intPart);
@@ -311,27 +285,19 @@ namespace cvt_2_fraction
 
 			for (;;)
 			{
-				assert(low.toFloat() <= val);
-				assert(high.toFloat() >= val);
+				assert(toFloat<int_type>(low) <= val);
+				assert(toFloat<int_type>(high) >= val);
 
 				//         b*m - a
 				//     x = -------
 				//         c - d*m
-				double testLow = low.denom * val - low.num;
-				double testHigh = high.num - high.denom * val;
+				double testLow = low.denominator() * val - low.numerator();
+				double testHigh = high.numerator() - high.denominator() * val;
 
 				if (DebugReporting)
 				{
-					std::cerr << std::format("Fraction: testlow = {} (fraction: {}), testhigh = {} (fraction: {}) - {}\n",
-							testLow, low, testHigh, high, lowest_acceptable_denom);
-				}
-
-				if (testHigh <= testLow && high.denom <= lowest_acceptable_denom)
-				{
-					ans = high;
-				} else if (low.denom <= lowest_acceptable_denom)
-				{
-					ans = low;
+					std::cerr << std::format("Fraction: testlow = {} (fraction: {}), testhigh = {} (fraction: {})\n",
+							testLow, low, testHigh, high);
 				}
 
 				// test for match:
@@ -343,18 +309,16 @@ namespace cvt_2_fraction
 				// b * m - a < b * precision
 				//
 				// which is happening here: check both the current A and B fractions.
-				//if (testHigh < high.denom * Precision)
+				//if (testHigh < high.denominator() * Precision)
 				if (testHigh < Precision) // [i_a] speed improvement; this is even better for irrational 'val'
 				{
-					ans = high;
 					break; // high is answer
 				}
-				//if (testLow < low.denom * Precision)
+				//if (testLow < low.denominator() * Precision)
 				if (testLow < Precision) // [i_a] speed improvement; this is even better for irrational 'val'
 				{
 					// low is answer
 					high = low;
-					ans = low;
 					break;
 				}
 
@@ -370,7 +334,7 @@ namespace cvt_2_fraction
 				{
 					//double x1 = testHigh / testLow;
 					// safety checks: are we going to be out of integer bounds?
-					if ((x1 + 1) * low.denom + high.denom >= double(MaxValue))
+					if ((x1 + 1) * low.denominator() + high.denominator() >= double(MaxValue))
 					{
 						break;
 					}
@@ -381,27 +345,26 @@ namespace cvt_2_fraction
 					//     a + x*c
 					//     ------- = m
 					//     b + x*d
-					int_type h_num = n * low.num + high.num;
-					int_type h_denom = n * low.denom + high.denom;
+					int_type h_num = n * low.numerator() + high.numerator();
+					int_type h_denom = n * low.denominator() + high.denominator();
 
-					//int_type l_num = m * low.num + high.num;
-					//int_type l_denom = m * low.denom + high.denom;
-					int_type l_num = h_num + low.num;
-					int_type l_denom = h_denom + low.denom;
+					//int_type l_num = m * low.numerator() + high.numerator();
+					//int_type l_denom = m * low.denominator() + high.denominator();
+					int_type l_num = h_num + low.numerator();
+					int_type l_denom = h_denom + low.denominator();
 
 					if (DebugReporting) {
 						std::cerr << std::format("Fraction: x1 LT x2: n = {}, h: {}/{}, l: {}/{}</p>\n", n, h_num, h_denom, l_num, l_denom);
 					}
 
-					low.num = l_num;
-					low.denom = l_denom;
-					high.num = h_num;
-					high.denom = h_denom;
-				} else
+					low = Fraction<int_type>(l_num, l_denom);
+					high = Fraction<int_type>(h_num, h_denom);
+				}
+				else
 				{
 					//double x2 = testLow / testHigh;
 					// safety checks: are we going to be out of integer bounds?
-					if (low.denom + (x2 + 1) * high.denom >= double(MaxValue))
+					if (low.denominator() + (x2 + 1) * high.denominator() >= double(MaxValue))
 					{
 						break;
 					}
@@ -412,40 +375,34 @@ namespace cvt_2_fraction
 					//     a + x*c
 					//     ------- = m
 					//     b + x*d
-					int_type l_num = low.num + n * high.num;
-					int_type l_denom = low.denom + n * high.denom;
+					int_type l_num = low.numerator() + n * high.numerator();
+					int_type l_denom = low.denominator() + n * high.denominator();
 
-					//int_type h_num = low.num + m * high.num;
-					//int_type h_denom = low.denom + m * high.denom;
-					int_type h_num = l_num + high.num;
-					int_type h_denom = l_denom + high.denom;
+					//int_type h_num = low.numerator() + m * high.numerator();
+					//int_type h_denom = low.denominator() + m * high.denominator();
+					int_type h_num = l_num + high.numerator();
+					int_type h_denom = l_denom + high.denominator();
 
 					if (DebugReporting) {
 						std::cerr << std::format("Fraction: x1 LT x2: n = {}, h: {}/{}, l: {}/{}\n", n, h_num, h_denom, l_num, l_denom);
 					}
 
-					high.num = h_num;
-					high.denom = h_denom;
-					low.num = l_num;
-					low.denom = l_denom;
+					high = Fraction<int_type>(h_num, h_denom);
+					low = Fraction<int_type>(l_num, l_denom);
 				}
-				assert(low.toFloat() <= val);
-				assert(high.toFloat() >= val);
+				assert(toFloat(low) <= val);
+				assert(toFloat(high) >= val);
 			}
 
-			high.num += high.denom * intPart;
-
-			ans.num += ans.denom * intPart;
+			high += intPart;  // high = fraction(high) + fraction(intPart / 1)
 
 			if (DebugReporting)
 			{
-				std::cerr << std::format("Fraction: DONE for {} at precision {}: high = {},\n", val, Precision, high);
-				std::cerr << std::format("answer = {}\n", ans);
+				std::cerr << std::format("Fraction: DONE for {} at precision {}: answer = {}\n", val, Precision, high);
 			}
 
-			return ans; // high;
+			return high;
 		}
-	};
 }
 
 
@@ -463,6 +420,7 @@ struct std::formatter<boost::rational::rational<int_type>> {
 	}
 };
 
+#if 0
 template<typename int_type>
 struct std::formatter<cvt_2_fraction::Fraction<int_type>> {
 	using MyType = cvt_2_fraction::Fraction<int_type>;
@@ -472,9 +430,10 @@ struct std::formatter<cvt_2_fraction::Fraction<int_type>> {
 	}
 
 	auto format(const MyType& obj, std::format_context& ctx) const {
-		return std::format_to(ctx.out(), "{}", obj.toString());
+		return std::format_to(ctx.out(), "{}", toString(obj));
 	}
 };
+#endif
 
 
 
@@ -943,8 +902,8 @@ Fraction Fraction::toFract(double val)
  Fraction high(1, 1);          // "B" = 1/1
  for (int i = 0; i < 100; ++i)
  {
-  double testLow = low.denom * val - low.num;
-  double testHigh = high.num - high.denom * val;
+  double testLow = low.denom * val - low.numerator();
+  double testHigh = high.numerator() - high.denom * val;
   if (testHigh < Precision * high.denom)
    break; // high is answer
   if (testLow < Precision * low.denom)
@@ -956,28 +915,28 @@ Fraction Fraction::toFract(double val)
   {  // odd step: add multiple of low to high
    double test = testHigh / testLow;
    int count = (int)test;    // "N"
-   int num = (count + 1) * low.num + high.num;
+   int num = (count + 1) * low.numerator() + high.numerator();
    int denom = (count + 1) * low.denom + high.denom;
    if ((num > 0x8000) ||
        (denom > 0x10000))
     break;
-   high.num = num - low.num;  // new "A"
+   high.numerator() = num - low.numerator();  // new "A"
    high.denom = denom - low.denom;
-   low.num = num;             // new "B"
+   low.numerator() = num;             // new "B"
    low.denom = denom;
   }
   else
   {  // even step: add multiple of high to low
    double test = testLow / testHigh;
    int count = (int)test;     // "N"
-   int num = low.num + (count + 1) * high.num;
+   int num = low.numerator() + (count + 1) * high.numerator();
    int denom = low.denom + (count + 1) * high.denom;
    if ((num > 0x10000) ||
        (denom > 0x10000))
     break;
-   low.num = num - high.num;  // new "A"
+   low.numerator() = num - high.numerator();  // new "A"
    low.denom = denom - high.denom;
-   high.num = num;            // new "B"
+   high.numerator() = num;            // new "B"
    high.denom = denom;
   }
  }
