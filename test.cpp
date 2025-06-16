@@ -6,7 +6,7 @@
 using namespace cvt_2_fraction;
 
 
-namespace 
+namespace
 {
 	template<typename int_type>
 	void Test(void)
@@ -54,16 +54,21 @@ namespace
 		ret = toFract<int_type>(vut, 1E-9);
 		assert(std::abs(vut - toFloat(ret)) < 1E-9);
 	}
+
+
+
+	void TestFractionConversion(void) {
+		Test<int>();
+		Test<long>();
+		Test<int32_t>();
+		Test<int64_t>();
+	}
 }
 
 
-extern "C"
-void TestFractionConversion(void) {
-	Test<int>();
-	Test<long>();
-	Test<int32_t>();
-	Test<int64_t>();
-}
+#if defined(BUILD_MONOLITHIC)
+#define main cvt2frac_test_main
+#endif
 
 extern "C"
 int main(void) {
